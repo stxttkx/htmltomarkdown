@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markdown转换器</title>
+<style>
+:root {
+  --bg: #0e1117;
+  --bg-elevated: #161b22;
+  --bg-card: #1c2129;
+  --fg: #e6edf3;
+  --fg-muted: #7d8590;
+  --fg-subtle: #484f58;
+  --accent: #f0883e;
+  --accent-glow: rgba(240, 136, 62, 0.15);
+  --accent-hover: #f5a060;
+  --green: #3fb950;
+  --green-glow: rgba(63, 185, 80, 0.12);
+  --red: #f85149;
+  --border: #30363d;
+  --border-focus: #f0883e;
+  --radius: 10px;
+  --radius-sm: 6px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+.bg-glow {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none; z-index: 0; overflow: hidden;
+}
+.bg-glow::before {
+  content: ''; position: absolute; top: -20%; left: -10%;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(240, 136, 62, 0.06) 0%, transparent 70%);
+  animation: floatA 18s ease-in-out infinite;
+}
+.bg-glow::after {
+  content: ''; position: absolute; bottom: -15%; right: -5%;
+  width: 600px; height: 600px;
+  background: radial-gradient(circle, rgba(63, 185, 80, 0.04) 0%, transparent 70%);
+  animation: floatB 22s ease-in-out infinite;
+}
+@keyframes floatA {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(80px, 60px) scale(1.15); }
+}
+@keyframes floatB {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-60px, -40px) scale(1.1); }
+}
+.bg-grid {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 32px 24px 48px; }
+header { text-align: center; margin-bottom: 36px; }
+header .badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--accent-glow); border: 1px solid rgba(240, 136, 62, 0.25);
+  color: var(--accent); font-size: 12px; font-weight: 500;
+  padding: 4px 14px; border-radius: 20px; margin-bottom: 16px; letter-spacing: 0.5px;
+}
+header h1 {
+  font-size: 36px; font-weight: 900; letter-spacing: -1px; line-height: 1.2;
+  background: linear-gradient(135deg, var(--fg) 40%, var(--accent) 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+header p { color: var(--fg-muted); font-size: 15px; margin-top: 8px; font-weight: 300; }
+.toolbar { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--bg-card);
+  color: var(--fg); font-size: 14px; font-weight: 500;
+  font-family: inherit; cursor: pointer; transition: all 0.2s ease; user-select: none;
+}
+.btn:hover { border-color: var(--fg-subtle); background: var(--bg-elevated); transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; box-shadow: 0 2px 16px rgba(240, 136, 62, 0.25); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); box-shadow: 0 4px 24px rgba(240, 136, 62, 0.35); }
+.btn-success { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+.btn-success:hover { background: #4cc964; border-color: #4cc964; }
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 860px) { .editor-grid { grid-template-columns: 1fr; } }
+.panel {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); overflow: hidden;
+  display: flex; flex-direction: column; transition: border-color 0.25s;
+}
+.panel:focus-within { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-glow); }
+.panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-elevated); flex-shrink: 0; }
+.panel-header .label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.8px; }
+.panel-header .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-orange { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.dot-green { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.panel-header .meta { font-size: 12px; color: var(--fg-subtle); font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; }
+.editor-wrap { flex: 1; position: relative; min-height: 520px; }
+.editor-wrap textarea {
+  width: 100%; height: 100%; min-height: 520px; padding: 16px 18px;
+  background: transparent; border: none; outline: none; color: var(--fg);
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px; line-height: 1.7; resize: vertical; tab-size: 2;
+}
+.editor-wrap textarea::placeholder { color: var(--fg-subtle); }
+.output-wrap {
+  flex: 1; min-height: 520px; padding: 16px 18px;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 13px; line-height: 1.7; color: var(--fg); overflow: auto;
+  white-space: pre-wrap; word-break: break-word;
+}
+.output-wrap:empty::before { content: '转换后的Markdown将在这里显示...'; color: var(--fg-subtle); }
+.stats-bar { display: flex; align-items: center; justify-content: center; gap: 32px; margin-top: 24px; padding: 14px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.stat-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--fg-muted); }
+.stat-item .num { font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-weight: 600; color: var(--fg); min-width: 28px; text-align: right; }
+.toast-container { position: fixed; top: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+.toast { display: flex; align-items: center; gap: 10px; padding: 12px 20px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 500; color: #fff; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); animation: toastIn 0.35s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: auto; }
+.toast-success { background: #1a7f37; border: 1px solid #2ea043; }
+.toast-error { background: #b62324; border: 1px solid #f85149; }
+.toast-info { background: #6e40c9; border: 1px solid #8957e5; }
+.toast-out { animation: toastOut 0.3s ease forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(40px) scale(0.95); } to { opacity: 1; transform: translateX(0) scale(1); } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(40px) scale(0.95); } }
+.shortcuts { text-align: center; margin-top: 20px; color: var(--fg-subtle); font-size: 12px; }
+.shortcuts kbd { display: inline-block; padding: 2px 7px; background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 4px; font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 11px; color: var(--fg-muted); margin: 0 2px; }
+.md-h { color: var(--accent); font-weight: 700; }
+.md-code { color: #79c0ff; }
+.md-bold { color: #ffa657; font-weight: 700; }
+.md-italic { color: #d2a8ff; }
+.md-hr { color: var(--fg-subtle); }
+.md-table { color: #7ee787; }
+.md-list { color: #ff7b72; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--fg-subtle); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-muted); }
+</style>
+</head>
+<body>
+<div class="bg-glow"></div>
+<div class="bg-grid"></div>
+<div class="app">
+  <header>
+    <div class="badge">⚡ HTML→Markdown</div>
+    <h1>文章转换器</h1>
+    <p>粘贴富文本HTML，一键生成编辑器可用的Markdown</p>
+  </header>
+  <div class="toolbar">
+    <button class="btn" id="btnClear">🧹 清空</button>
+    <button class="btn" id="btnPaste">📋 粘贴剪贴板</button>
+    <button class="btn btn-primary" id="btnConvert">🔄 转换</button>
+    <button class="btn btn-success" id="btnCopy">⎘ 复制结果</button>
+  </div>
+  <div class="editor-grid">
+    <div class="panel" id="panelInput">
+      <div class="panel-header">
+        <div class="label"><span class="dot dot-orange"></span> HTML输入</div>
+        <div class="meta" id="inputMeta">0字符</div>
+      </div>
+      <div class="editor-wrap">
+        <textarea id="inputArea" placeholder="在这里粘贴HTML代码...&#10;&#10;支持公众号、掘金、知乎等平台富文本导出&#10;也可直接粘贴带格式富文本（浏览器自动转HTML）" spellcheck="false"></textarea>
+      </div>
+    </div>
+    <div class="panel" id="panelOutput">
+      <div class="panel-header">
+        <div class="label"><span class="dot dot-green"></span> Markdown输出</div>
+        <div class="meta" id="outputMeta">0行</div>
+      </div>
+      <div class="output-wrap" id="outputArea"></div>
+    </div>
+  </div>
+  <div class="stats-bar">
+    <div class="stat-item"><span>段落</span><span class="num" id="statP">0</span></div>
+    <div class="stat-item"><span>标题</span><span class="num" id="statH">0</span></div>
+    <div class="stat-item"><span>代码块</span><span class="num" id="statCode">0</span></div>
+    <div class="stat-item"><span>列表项</span><span class="num" id="statLi">0</span></div>
+    <div class="stat-item"><span>表格</span><span class="num" id="statTable">0</span></div>
+    <div class="stat-item"><span>链接/图片</span><span class="num" id="statLink">0</span></div>
+  </div>
+  <div class="shortcuts">
+    <kbd>Ctrl</kbd>+<kbd>V</kbd> 粘贴HTML | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> 转换 | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd> 复制结果
+  </div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+<script>
+function showToast(msg, type) {
+  type = type || 'info';
+  const container = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+  t.innerHTML = icons[type] + ' ' + msg;
+  container.appendChild(t);
+  setTimeout(() => { t.classList.add('toast-out'); setTimeout(() => t.remove(), 300); }, 2400);
+}
+
+function updateStats(md) {
+  const lines = md.split('\n');
+  document.getElementById('outputMeta').textContent = lines.length + '行';
+  document.getElementById('statP').textContent = (md.match(/\n\n/g) || []).length + 1;
+  document.getElementById('statH').textContent = (md.match(/^#{1,6}\s/gm) || []).length;
+  document.getElementById('statCode').textContent = Math.floor((md.match(/^```/gm) || []).length / 2);
+  document.getElementById('statLi').textContent = (md.match(/^[-*]\s/gm) || []).length + (md.match(/^\d+\.\s/gm) || []).length;
+  // 更准确的表格统计
+  const tableMatches = md.match(/^\|.*\|$/gm) || [];
+  if (tableMatches.length > 2) {
+    document.getElementById('statTable').textContent = Math.floor((tableMatches.length - 1) / 2);
+  } else {
+    document.getElementById('statTable').textContent = 0;
+  }
+  const linkRegex = /\[.*?\]\([^)]*\)/g;
+  document.getElementById('statLink').textContent = (md.match(linkRegex) || []).length;
+}
+
+document.getElementById('inputArea').addEventListener('input', function() {
+  document.getElementById('inputMeta').textContent = this.value.length + '字符';
+});
+
+function extractTextWithBr(node) {
+  let res = '';
+  for (let i = 0; i < node.childNodes.length; i++) {
+    const child = node.childNodes[i];
+    if (child.nodeType === Node.TEXT_NODE) res += child.textContent;
+    else if (child.nodeType === Node.ELEMENT_NODE) {
+      if (child.tagName.toLowerCase() === 'br') res += '\n';
+      else res += extractTextWithBr(child);
+    }
+  }
+  return res;
+}
+
+function htmlToMarkdown(html) {
+  if (!html.trim()) return '';
+  
+  // 清理HTML
+  html = html.replace(/<mp-style-type[^>]*>.*?<\/mp-style-type>/gi, '');
+  html = html.replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, '');
+  html = html.replace(/<section[^>]*>\s*(<br\s*\/?>)?\s*<\/section>/gi, '');
+  
+  let doc;
+  try {
+    doc = new DOMParser().parseFromString(html, 'text/html');
+  } catch (e) {
+    throw new Error('解析HTML失败: ' + e.message);
+  }
+  
+  const body = doc.body;
+  
+  function extractInline(node) {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const tag = node.tagName.toLowerCase();
+    const passTags = ['section','span','div','p','article','main','header','footer','figure','figcaption','details','summary','label','time','small','abbr','bdi','bdo','data','mark','ruby','rt','rp','wbr'];
+    if (passTags.includes(tag)) {
+      let parts = [];
+      for (let i = 0; i < node.childNodes.length; i++) parts.push(extractInline(node.childNodes[i]));
+      return parts.join('');
+    }
+    let innerParts = [];
+    for (let j = 0; j < node.childNodes.length; j++) innerParts.push(extractInline(node.childNodes[j]));
+    const inner = innerParts.join('');
+    switch (tag) {
+      case 'strong': case 'b': return inner.trim() ? '**' + inner + '**' : inner;
+      case 'em': case 'i': return inner.trim() ? '*' + inner + '*' : inner;
+      case 'code': return node.parentElement?.tagName.toLowerCase() === 'pre' ? inner : (inner.trim() ? '`' + inner + '`' : inner);
+      case 'a': return '[' + inner + '](' + (node.getAttribute('href') || '') + ')';
+      case 'img': return '![' + (node.getAttribute('alt') || '') + '](' + (node.getAttribute('src') || '') + ')';
+      case 'br': return '\n';
+      case 'del': case 's': case 'strike': return '~~' + inner + '~~';
+      default: return inner;
+    }
+  }
+  
+  function guessLang(text) {
+    const t = text.trim();
+    if (/^\s*(FROM|RUN|CMD|COPY|ADD|WORKDIR|EXPOSE)/mi.test(t)) return 'dockerfile';
+    if (/^\s*(def\s|import\s|from\s|class\s|print\()/mi.test(t)) return 'python';
+    if (/^\s*(fn\s|let\s|mut\s|pub\s|use\s|impl\s|struct\s)/mi.test(t)) return 'rust';
+    if (/^\s*(package\s|func\s|type\s|interface\s)/mi.test(t)) return 'go';
+    if (/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)/mi.test(t)) return 'sql';
+    if (/^\s*(version|services|image|container_name|ports|volumes)/mi.test(t)) return 'yaml';
+    if (/^\s*(import\s|export\s|const\s|let\s|var\s|function\s|=>)/m.test(t)) return 'javascript';
+    return '';
+  }
+  
+  function processBlock(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const t = node.textContent;
+      return t.trim() ? t.trim() : '';
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return '';
+    const tag = node.tagName.toLowerCase();
+    const style = node.getAttribute('style') || '';
+    if (style.includes('display: none') || tag === 'mp-style-type') return '';
+    
+    switch (tag) {
+      case 'h1': return '# ' + extractInline(node).trim();
+      case 'h2': return '## ' + extractInline(node).trim();
+      case 'h3': return '### ' + extractInline(node).trim();
+      case 'h4': return '#### ' + extractInline(node).trim();
+      case 'h5': return '##### ' + extractInline(node).trim();
+      case 'h6': return '###### ' + extractInline(node).trim();
+      case 'p': return extractInline(node).trim() || '';
+      case 'pre': {
+        const codeEl = node.querySelector('code');
+        const target = codeEl || node;
+        let codeText = extractTextWithBr(target);
+        codeText = codeText.replace(/\u00A0/g, ' ').replace(/\n+$/, '');
+        const lang = guessLang(codeText);
+        return '```' + lang + '\n' + codeText + '\n```';
+      }
+      case 'blockquote': return processChildren(node).split('\n').filter(l => l.trim()).map(l => '> ' + l).join('\n');
+      case 'ul': {
+        const items = [];
+        for (let i = 0; i < node.children.length; i++) {
+          const li = node.children[i];
+          if (li.tagName.toLowerCase() === 'li') {
+            const liText = extractInline(li).trim();
+            if (liText) items.push('- ' + liText);
+          }
+        }
+        return items.join('\n');
+      }
+      case 'ol': {
+        const items = [];
+        let idx = parseInt(node.getAttribute('start')) || 1;
+        for (let i = 0; i < node.children.length; i++) {
+          const li = node.children[i];
+          if (li.tagName.toLowerCase() === 'li') {
+            const liText = extractInline(li).trim();
+            if (liText) items.push(idx + '. ' + liText);
+            idx++;
+          }
+        }
+        return items.join('\n');
+      }
+      case 'table': return convertTable(node);
+      case 'hr': return '---';
+      case 'img': return '![' + (node.getAttribute('alt') || '') + '](' + (node.getAttribute('src') || '') + ')';
+      case 'figure': {
+        const imgNode = node.querySelector('img');
+        const cap = node.querySelector('figcaption');
+        if (imgNode) {
+          let md = '![' + (imgNode.getAttribute('alt') || '') + '](' + (imgNode.getAttribute('src') || '') + ')';
+          if (cap) md += '\n*' + extractInline(cap).trim() + '*';
+          return md;
+        }
+        return processChildren(node);
+      }
+      case 'div': case 'section': case 'article': case 'main': case 'header': case 'footer': case 'nav': case 'aside': case 'span': case 'details': case 'summary': case 'body': case 'html':
+        return processChildren(node);
+      default: return extractInline(node);
+    }
+  }
+  
+  function processChildren(node) {
+    const parts = [];
+    for (let i = 0; i < node.childNodes.length; i++) {
+      const res = processBlock(node.childNodes[i]);
+      if (res) parts.push(res);
+    }
+    return parts.join('\n\n');
+  }
+  
+  function convertTable(tableNode) {
+    const rows = [];
+    const trs = tableNode.querySelectorAll('tr');
+    for (let i = 0; i < trs.length; i++) {
+      const tr = trs[i];
+      const cells = [];
+      for (let j = 0; j < tr.children.length; j++) {
+        const cell = tr.children[j];
+        if (cell.tagName.toLowerCase() === 'td' || cell.tagName.toLowerCase() === 'th') {
+          cells.push(extractInline(cell).trim().replace(/\|/g, '\\|').replace(/\n/g, ' '));
+        }
+      }
+      if (cells.length) rows.push(cells);
+    }
+    if (!rows.length) return '';
+    const colCount = Math.max(...rows.map(r => r.length));
+    rows.forEach(row => { while (row.length < colCount) row.push(''); });
+    let md = '| ' + rows[0].join(' | ') + ' |\n';
+    md += '| ' + rows[0].map(() => '---').join(' | ') + ' |\n';
+    for (let i = 1; i < rows.length; i++) md += '| ' + rows[i].join(' | ') + ' |\n';
+    return md.replace(/\n$/, '');
+  }
+  
+  let md = processBlock(body);
+  md = md.replace(/\n{3,}/g, '\n\n').split('\n').map(l => l.trimEnd()).join('\n').replace(/^\n+|\n+$/g, '');
+  return md;
+}
+
+function highlightMd(md) {
+  let html = md.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const codeBlocks = [];
+  html = html.replace(/(```\w*\n)([\s\S]*?)(```)/g, (m, o, c, cl) => {
+    const idx = codeBlocks.length;
+    const safe = c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    codeBlocks.push('<span class="md-code">' + o + safe + cl + '</span>');
+    return '%%CB_' + idx + '%%';
+  });
+  html = html.replace(/^(#{1,6}\s.+)$/gm, '<span class="md-h">$1</span>')
+             .replace(/^(---+)$/gm, '<span class="md-hr">$1</span>')
+             .replace(/^(\|.+)$/gm, '<span class="md-table">$1</span>')
+             .replace(/^(\s*[-*]\s.+)$/gm, '<span class="md-list">$1</span>')
+             .replace(/^(\s*\d+\.\s.+)$/gm, '<span class="md-list">$1</span>')
+             .replace(/(`[^`]+`)/g, '<span class="md-code">$1</span>')
+             .replace(/(\*\*[^*]+\*\*)/g, '<span class="md-bold">$1</span>')
+             .replace(/(\*[^*]+\*)/g, '<span class="md-italic">$1</span>')
+             .replace(/!\[.*?\]\([^)]*\)/g, '<span class="md-code">$&</span>');
+  for (let i = 0; i < codeBlocks.length; i++) html = html.replace('%%CB_' + i + '%%', codeBlocks[i]);
+  return html;
+}
+
+const inputArea = document.getElementById('inputArea');
+const outputArea = document.getElementById('outputArea');
+let rawMd = '';
+
+document.getElementById('btnConvert').addEventListener('click', () => {
+  const html = inputArea.value;
+  if (!html.trim()) return showToast('请先粘贴HTML内容', 'error');
+  try {
+    rawMd = htmlToMarkdown(html);
+    if (!rawMd.trim()) return showToast('未提取到有效内容，请检查HTML格式', 'error');
+    outputArea.innerHTML = highlightMd(rawMd);
+    updateStats(rawMd);
+    showToast('转换成功', 'success');
+  } catch (e) {
+    showToast('转换出错：' + e.message, 'error');
+  }
+});
+
+document.getElementById('btnCopy').addEventListener('click', () => {
+  if (!rawMd.trim()) return showToast('无内容可复制，请先转换', 'error');
+  navigator.clipboard.writeText(rawMd).then(() => showToast('已复制到剪贴板', 'success'))
+    .catch(() => {
+      // 降级方案：使用textarea
+      const ta = document.createElement('textarea');
+      ta.value = rawMd;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('已复制到剪贴板', 'success');
+      } catch (e) {
+        showToast('复制失败，请手动复制', 'error');
+      }
+      document.body.removeChild(ta);
+    });
+});
+
+document.getElementById('btnClear').addEventListener('click', () => {
+  inputArea.value = '';
+  outputArea.innerHTML = '';
+  rawMd = '';
+  document.getElementById('inputMeta').textContent = '0字符';
+  document.getElementById('outputMeta').textContent = '0行';
+  updateStats('');
+  showToast('已清空', 'info');
+});
+
+document.getElementById('btnPaste').addEventListener('click', () => {
+  navigator.clipboard.readText().then(text => {
+    inputArea.value = text;
+    document.getElementById('inputMeta').textContent = text.length + '字符';
+    showToast('已从剪贴板粘贴', 'success');
+  }).catch(() => showToast('无法读取剪贴板，请手动粘贴', 'error'));
+});
+
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); document.getElementById('btnCopy').click(); }
+  if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); document.getElementById('btnConvert').click(); }
+});
+
+inputArea.addEventListener('paste', () => setTimeout(() => document.getElementById('inputMeta').textContent = inputArea.value.length + '字符', 50));
+</script>
+</body>
+</html>
